@@ -1,4 +1,3 @@
-
 import argparse
 import ast
 from pathlib import Path
@@ -23,10 +22,8 @@ class CodeAnalyzer(ast.NodeVisitor):
         self.functions.append(node.name)
         previous = self.current_function
         self.current_function = node.name
-
         for child in node.body:
             self.visit(child)
-
         self.current_function = previous
 
     def visit_AsyncFunctionDef(self, node):
@@ -49,9 +46,7 @@ class CodeAnalyzer(ast.NodeVisitor):
             called_name = None
 
         if called_name:
-            self.calls.append(
-                (self.current_function, called_name)
-            )
+            self.calls.append((self.current_function, called_name))
 
         self.generic_visit(node)
 
@@ -66,7 +61,6 @@ def analyze_file(path):
 
     analyzer = CodeAnalyzer()
     analyzer.visit(tree)
-
     return (
         sorted(set(analyzer.functions)),
         sorted(analyzer.imports),
@@ -77,18 +71,12 @@ def analyze_file(path):
 def analyze_project(project_dir, graph_name=GRAPH_NAME):
     """Build file, function, import, and call relationships."""
     project_dir = Path(project_dir).resolve()
-
     if not project_dir.is_dir():
-        raise FileNotFoundError(
-            f"Project folder not found: {project_dir}"
-        )
+        raise FileNotFoundError(f"Project folder not found: {project_dir}")
 
     files = sorted(project_dir.rglob("*.py"))
-
     if not files:
-        raise ValueError(
-            f"No Python files found in {project_dir}"
-        )
+        raise ValueError(f"No Python files found in {project_dir}")
 
     db = FalkorDB(host="localhost", port=6379)
     graph = db.select_graph(graph_name)
@@ -96,27 +84,22 @@ def analyze_project(project_dir, graph_name=GRAPH_NAME):
     # Rebuild the selected graph for this project.
     graph.query("MATCH (n) DETACH DELETE n")
 
-    project_prefix = project_dir.name
-
+    # Store project-relative paths, never temporary extraction directory names.
     def graph_path(path):
-        return (
-            f"{project_prefix}/"
-            f"{path.relative_to(project_dir).as_posix()}"
-        )
+        return path.relative_to(project_dir).as_posix()
 
-    module_to_path = {
-        path.stem: graph_path(path)
-        for path in files
-    }
+    module_to_path = {}
+    for path in files:
+        # If duplicate module stems exist, don't guess which one an import means.
+        module_to_path.setdefault(path.stem, [])
+        module_to_path[path.stem].append(graph_path(path))
 
     file_info = {}
     function_info = []
 
-    # Create file and function nodes.
     for path in files:
         relative_path = graph_path(path)
         functions, imports, calls = analyze_file(path)
-
         file_info[relative_path] = imports
 
         graph.query(
@@ -137,33 +120,28 @@ def analyze_project(project_dir, graph_name=GRAPH_NAME):
 
         for caller, callee in calls:
             if caller:
-                function_info.append(
-                    (relative_path, caller, callee)
-                )
+                function_info.append((relative_path, caller, callee))
 
-    # File-level import relationships.
+    # Create file-level import relationships only when a module maps uniquely.
     for source, imports in file_info.items():
         for module in imports:
-            target = module_to_path.get(module)
+            candidates = module_to_path.get(module, [])
+            if len(candidates) != 1:
+                continue
+            target = candidates[0]
+            if target == source:
+                continue
 
-            if target and target != source:
-                graph.query(
-                    """
-                    MATCH (a:File {path: $source})
-                    MATCH (b:File {path: $target})
-                    MERGE (a)-[:IMPORTS]->(b)
-                    """,
-                    {"source": source, "target": target},
-                )
+            graph.query(
+                """
+                MATCH (a:File {path: $source})
+                MATCH (b:File {path: $target})
+                MERGE (a)-[:IMPORTS]->(b)
+                """,
+                {"source": source, "target": target},
+            )
 
-    # Function-level call relationships.
-    # Resolve calls only when exactly one matching function exists.
-    function_names = {}
-
-    for path, caller, callee in function_info:
-        function_names.setdefault(caller, set())
-        function_names.setdefault(callee, set())
-
+    # Resolve function calls only when caller and callee names are unambiguous.
     definitions = graph.ro_query(
         """
         MATCH (f:File)-[:DEFINES]->(fn:Function)
@@ -173,23 +151,19 @@ def analyze_project(project_dir, graph_name=GRAPH_NAME):
 
     definitions_by_name = {}
     for row in definitions.result_set:
-        definitions_by_name.setdefault(row[1], []).append(
-            (row[0], row[1])
-        )
+        definitions_by_name.setdefault(row[1], []).append((row[0], row[1]))
 
     for source_path, caller_name, callee_name in function_info:
-        callers = definitions_by_name.get(caller_name, [])
+        callers = [
+            item for item in definitions_by_name.get(caller_name, [])
+            if item[0] == source_path
+        ]
         callees = definitions_by_name.get(callee_name, [])
 
-        source_callers = [
-            item for item in callers if item[0] == source_path
-        ]
-
-        # Avoid guessing if names are ambiguous.
-        if len(source_callers) != 1 or len(callees) != 1:
+        if len(callers) != 1 or len(callees) != 1:
             continue
 
-        caller_file, caller = source_callers[0]
+        caller_file, caller = callers[0]
         callee_file, callee = callees[0]
 
         graph.query(
@@ -217,7 +191,6 @@ def analyze_project(project_dir, graph_name=GRAPH_NAME):
         ORDER BY a.path, b.path
         """
     )
-
     for row in dependencies.result_set:
         print(f"{row[0]} imports {row[1]}")
 
@@ -229,18 +202,11 @@ def analyze_project(project_dir, graph_name=GRAPH_NAME):
         ORDER BY a.file, a.name, b.name
         """
     )
-
     if calls_result.result_set:
         for row in calls_result.result_set:
-            print(
-                f"{row[1]}::{row[0]} calls "
-                f"{row[3]}::{row[2]}"
-            )
+            print(f"{row[1]}::{row[0]} calls {row[3]}::{row[2]}")
     else:
-        print(
-            "No uniquely resolved function calls found. "
-            "Some calls may be ambiguous or external."
-        )
+        print("No uniquely resolved function calls found. Some calls may be ambiguous or external.")
 
     return graph
 
@@ -255,7 +221,6 @@ def main():
         help="Path to the Python project folder to analyze.",
     )
     args = parser.parse_args()
-
     analyze_project(args.project)
 
 
