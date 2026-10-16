@@ -1,0 +1,5 @@
+streamlit
+falkordb
+streamlit-agraph
+google-genai
+python-dotenv

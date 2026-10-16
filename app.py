@@ -16,17 +16,67 @@ st.set_page_config(
     page_title="RepoSage AI",
     page_icon="🔍",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
+st.markdown(
+    """
+    <style>
+      :root { --rs-bg: #0b1020; --rs-panel: #121a2b; --rs-border: #26344c;
+              --rs-muted: #9aabc4; --rs-accent: #7c9cff; }
+      .stApp { background: var(--rs-bg); }
+      [data-testid="stHeader"] { background: rgba(11, 16, 32, 0.92); }
+      [data-testid="stSidebar"] { background: #0e1627; border-right: 1px solid var(--rs-border); }
+      [data-testid="stSidebar"] * { color: #e7edf8; }
+      .block-container { max-width: 1440px; padding-top: 1.7rem; padding-bottom: 3rem; }
+      h1, h2, h3 { letter-spacing: -0.025em; }
+      h1 { font-size: 2.25rem !important; font-weight: 750 !important; }
+      h2, h3 { font-weight: 680 !important; }
+      [data-testid="stMetric"] {
+        background: var(--rs-panel); border: 1px solid var(--rs-border);
+        padding: 1rem 1.1rem; border-radius: 14px;
+      }
+      [data-testid="stMetricLabel"] { color: var(--rs-muted); }
+      [data-testid="stMetricValue"] { color: #f4f7ff; }
+      div[data-testid="stFileUploader"] {
+        background: var(--rs-panel); border: 1px dashed #405473;
+        border-radius: 14px; padding: .7rem;
+      }
+      div.stButton > button {
+        border-radius: 9px; border: 1px solid #405780; font-weight: 650;
+        padding: .55rem 1rem; transition: all .15s ease;
+      }
+      div.stButton > button[kind="primary"] {
+        background: #6f8fff; border-color: #6f8fff; color: #081020;
+      }
+      div.stButton > button:hover { border-color: #9cb2ff; transform: translateY(-1px); }
+      div[data-testid="stAlert"] { border-radius: 10px; }
+      hr { border-color: var(--rs-border); }
+      code { border-radius: 5px; }
+      .rs-eyebrow { color: #9fb4ff; font-size: .76rem; font-weight: 750;
+                    letter-spacing: .13em; text-transform: uppercase; }
+      .rs-subtitle { color: var(--rs-muted); font-size: 1rem; margin-top: -.55rem; }
+      .rs-panel { background: var(--rs-panel); border: 1px solid var(--rs-border);
+                  padding: 1rem 1.15rem; border-radius: 14px; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown('<div class="rs-eyebrow">CODE INTELLIGENCE WORKSPACE</div>', unsafe_allow_html=True)
 st.title("RepoSage AI")
-st.caption("Intelligent Code Change Impact Analyzer")
+st.markdown(
+    '<div class="rs-subtitle">Understand code dependencies. Estimate change impact. Review AI-assisted recommendations.</div>',
+    unsafe_allow_html=True,
+)
+st.divider()
 
 
 # --------------------------------------------------
 # Repository Upload
 # --------------------------------------------------
-st.subheader("Analyze Your Own Python Project")
-st.write("Upload a ZIP file containing your Python source code.")
+st.subheader("01  /  Analyze repository")
+st.write("Upload a ZIP containing Python source files. RepoSage builds a dependency graph for the project.")
 
 uploaded_zip = st.file_uploader(
     "Choose a Python project ZIP",
